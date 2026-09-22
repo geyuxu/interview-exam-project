@@ -45,7 +45,7 @@ def event_time(event: dict) -> float:
 
 def parse_tracking(payload, tracking_no: str) -> dict:
     if not isinstance(payload, dict) or not isinstance(payload.get("tracking_results"), list):
-        return unavailable("承运商返回的数据格式无效")
+        return unavailable("The carrier returned an invalid data format.")
     result = next(
         (
             r
@@ -55,31 +55,36 @@ def parse_tracking(payload, tracking_no: str) -> dict:
         None,
     )
     if result is None:
-        return unavailable("承运商未返回该运单的记录")
+        return unavailable("The carrier returned no record for this consignment.")
     if result.get("errors"):
-        return unavailable("承运商返回查询错误，该运单目前不可查询")
+        return unavailable(
+            "The carrier reported a query error. This consignment is currently unavailable."
+        )
     items = result.get("trackable_items", [])
     if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
-        return unavailable("承运商返回的数据格式无效")
+        return unavailable("The carrier returned an invalid data format.")
     events, statuses = [], []
     if text(result.get("status")):
         statuses.append(result["status"])
     for item in items:
         if item.get("errors"):
-            return unavailable("承运商返回部分包裹错误，物流结果不完整")
+            return unavailable(
+                "The carrier reported errors for some parcels. Tracking results are incomplete."
+            )
         if text(item.get("status")):
             statuses.append(item["status"])
         raw_events = item.get("events", [])
         if not isinstance(raw_events, list):
-            return unavailable("承运商返回的数据格式无效")
+            return unavailable("The carrier returned an invalid data format.")
         for event in raw_events:
             if not isinstance(event, dict):
-                return unavailable("承运商返回的数据格式无效")
+                return unavailable("The carrier returned an invalid data format.")
             description, date = text(event.get("description")), text(event.get("date"))
             if description or date:
                 events.append(
                     {
-                        "description": description or "承运商未提供事件描述",
+                        "description": description
+                        or "No event description provided by the carrier.",
                         "date": date,
                         "location": text(event.get("location")),
                         "article_id": text(item.get("article_id")),
@@ -87,9 +92,9 @@ def parse_tracking(payload, tracking_no: str) -> dict:
                 )
     events.sort(key=event_time, reverse=True)
     if not events and not statuses:
-        return unavailable("承运商尚未提供物流状态或事件")
+        return unavailable("The carrier has not provided a status or tracking events yet.")
     return {
-        **unavailable("测试环境返回，仅用于集成验证"),
+        **unavailable("Test environment response for integration testing only."),
         "state": "available",
         "status": " / ".join(dict.fromkeys(statuses)) or None,
         "last_update": next(
@@ -109,7 +114,10 @@ class TrackingService:
     def get(self, shipment: TrackingRequest) -> dict:
         if shipment.carrier == "tnt":
             return {
-                **unavailable("TNT 澳洲国内接口尚未配置，相关运费为 A$0.00", "not_implemented"),
+                **unavailable(
+                    "TNT Australia domestic tracking is not integrated. Shipping is A$0.00.",
+                    "not_implemented",
+                ),
                 "environment": None,
             }
         api_key = os.getenv("AUSPOST_API_KEY", "").strip()
@@ -123,7 +131,10 @@ class TrackingService:
         if not all((api_key, password, account)) or any(
             "\n" in value or "\r" in value for value in (api_key, password, account)
         ):
-            return unavailable("服务端尚未正确配置承运商凭证", "not_configured")
+            return unavailable(
+                "Carrier credentials are missing or invalid in the server configuration.",
+                "not_configured",
+            )
         fingerprint = hashlib.sha256(f"{api_key}\0{password}\0{account}".encode()).hexdigest()
         key = (shipment.carrier, shipment.tracking_no, fingerprint)
         with self.lock:
@@ -131,11 +142,15 @@ class TrackingService:
             if key in self.cache and now - self.cache[key][0] < 60:
                 return {**self.cache[key][1], "cached": True}
             if key in self.in_flight:
-                return unavailable("该运单已有查询进行中，请稍后重试")
+                return unavailable(
+                    "A query for this consignment is already in progress. Please try again shortly."
+                )
             while self.requests and now - self.requests[0] >= 60:
                 self.requests.popleft()
             if len(self.requests) >= 10:
-                return unavailable("已达到每分钟查询上限，请稍后再试")
+                return unavailable(
+                    "The per-minute query limit has been reached. Please try again later."
+                )
             self.requests.append(now)
             self.in_flight.add(key)
         # A slow consignment must not hold the global cache/rate-limit lock.
@@ -169,10 +184,12 @@ class TrackingService:
                 return parse_tracking(response.json(), shipment.tracking_no)
             if response.status_code in (401, 403):
                 result = unavailable(
-                    f"承运商测试接口返回 HTTP {response.status_code}：认证或账户授权失败，请检查服务端凭证或联系承运商"
+                    f"Carrier test API returned HTTP {response.status_code}: authentication or account authorisation failed. Check the server credentials or contact the carrier."
                 )
             else:
-                result = unavailable(f"承运商接口返回 HTTP {response.status_code}，请稍后重试")
+                result = unavailable(
+                    f"Carrier API returned HTTP {response.status_code}. Please try again later."
+                )
             result["http_status"] = response.status_code
             try:
                 payload = response.json()
@@ -193,6 +210,8 @@ class TrackingService:
                 pass
             return result
         except httpx.TimeoutException:
-            return unavailable("承运商接口查询超时，请稍后重试")
+            return unavailable("The carrier request timed out. Please try again.")
         except (httpx.HTTPError, ValueError):
-            return unavailable("承运商接口连接失败或响应不是有效 JSON")
+            return unavailable(
+                "Could not connect to the carrier, or the response was not valid JSON."
+            )

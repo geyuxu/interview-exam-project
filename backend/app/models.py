@@ -51,17 +51,17 @@ class OrderDataset(InputModel):
         orders = {order.order_no for order in self.orders}
         shipments = {shipment.id: shipment for shipment in self.shipments}
         if len(orders) != len(self.orders) or len(shipments) != len(self.shipments):
-            raise ValueError("订单编号和物流 ID 必须各自唯一")
+            raise ValueError("Order numbers and shipment IDs must each be unique.")
         if any(shipment.order_no not in orders for shipment in self.shipments):
-            raise ValueError("物流记录关联的订单不存在")
+            raise ValueError("A shipment references an order that does not exist.")
         for line in self.line_items:
             shipment = shipments.get(line.shipment_id)
             if line.order_no not in orders or shipment is None:
-                raise ValueError("商品行关联的订单或物流记录不存在")
+                raise ValueError("A line item references an order or shipment that does not exist.")
             if shipment.order_no != line.order_no:
-                raise ValueError("商品行不能引用其他订单的物流记录")
+                raise ValueError("A line item cannot reference a shipment from another order.")
         if any(not any(line.order_no == number for line in self.line_items) for number in orders):
-            raise ValueError("每笔订单至少需要一行商品")
+            raise ValueError("Each order must contain at least one line item.")
         if any(not any(line.shipment_id == key for line in self.line_items) for key in shipments):
-            raise ValueError("每个物流记录至少需要关联一行商品")
+            raise ValueError("Each shipment must have at least one line item.")
         return self

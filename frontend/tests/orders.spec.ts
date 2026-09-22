@@ -32,18 +32,18 @@ test("source data, independent totals, search and multi-shipment", async ({
   await page.getByRole("button", { name: /Cann Life Dispensary/ }).click();
   await expect(page.locator("tbody tr")).toHaveCount(4);
   await expect(page.locator(".shipment-card")).toHaveCount(2);
-  await expect(page.getByText("未实现", { exact: true })).toBeVisible();
+  await expect(page.getByText("Not integrated", { exact: true })).toBeVisible();
   await expect(page.locator(".grand-total strong")).toHaveText("A$1,655.00");
-  await page.getByLabel("启用运费估算", { exact: true }).check();
+  await page.getByLabel("Estimate shipping", { exact: true }).check();
   await expect(page.locator(".grand-total strong")).toHaveText("A$1,671.00");
   await page.getByRole("searchbox").fill("TBAMET10");
   await expect(page.locator(".order-button")).toHaveCount(1);
   await expect(page.locator(".grand-total strong")).toHaveText("A$2,147.00");
   await page.getByRole("searchbox").fill("NO-SUCH-ORDER");
   await expect(
-    page.getByRole("heading", { name: "没有找到订单" }),
+    page.getByRole("heading", { name: "No orders found" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "清除搜索" }).click();
+  await page.getByRole("button", { name: "Clear search" }).click();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -55,13 +55,16 @@ test("download and import real input structure, missing SKU and invalid quantity
   page,
 }) => {
   const downloadEvent = page.waitForEvent("download");
-  await page.getByRole("link", { name: "下载订单模板" }).click();
+  await page.getByRole("link", { name: "Download template" }).click();
   expect((await downloadEvent).suggestedFilename()).toBe("orders.json");
   const data = input();
   data.line_items[0].sku = "UNKNOWN-TEST-SKU";
   await page.locator("input[type=file]").setInputFiles(upload(data));
   await expect(
-    page.getByText("商品资料不完整，暂不提供订单总额。", { exact: true }),
+    page.getByText(
+      "Product data is incomplete. The order total is unavailable.",
+      { exact: true },
+    ),
   ).toBeVisible();
   await expect(page.locator(".grand-total strong")).toHaveText("—");
   data.line_items[0].quantity = 0;
@@ -69,7 +72,7 @@ test("download and import real input structure, missing SKU and invalid quantity
   await expect(
     page.getByRole("alert").filter({ hasText: "quantity" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "返回题目订单" }).click();
+  await page.getByRole("button", { name: "Back to initial orders" }).click();
   await expect(page.locator(".grand-total strong")).toHaveText("A$2,131.00");
 });
 
@@ -79,15 +82,19 @@ test("malformed successful responses and offline failures recover without corrup
   await page.route("**/api/orders?*", (route) =>
     route.fulfill({ json: { orders: null } }),
   );
-  await page.getByRole("button", { name: "刷新订单" }).click();
-  await expect(page.getByRole("alert")).toContainText("数据结构不正确");
+  await page.getByRole("button", { name: "Refresh orders" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "unexpected data structure",
+  );
   await expect(page.locator(".grand-total strong")).toHaveText("A$2,131.00");
   await page.unroute("**/api/orders?*");
   await page.route("**/api/orders?*", (route) => route.abort());
-  await page.getByRole("button", { name: "重试", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("无法连接服务");
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Cannot connect to the server",
+  );
   await page.unroute("**/api/orders?*");
-  await page.getByRole("button", { name: "重试", exact: true }).click();
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(page.locator(".grand-total strong")).toHaveText("A$2,131.00");
 });
@@ -132,11 +139,14 @@ test("imported tracking uses supplied consignment; test fixture stays in tests",
   await page.route("**/api/tracking", (route) =>
     route.fulfill({ json: { state: "available", events: null } }),
   );
-  await page.getByRole("button", { name: /重新查询/ }).click();
+  await page.getByRole("button", { name: /Refresh tracking/ }).click();
   await expect(
-    page.getByText("服务返回的数据结构不正确，请重试或检查后端", {
-      exact: true,
-    }),
+    page.getByText(
+      "The server returned an unexpected data structure. Please retry or check the backend.",
+      {
+        exact: true,
+      },
+    ),
   ).toBeVisible();
 });
 

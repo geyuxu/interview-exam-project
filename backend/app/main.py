@@ -19,7 +19,7 @@ tracking_service = TrackingService()
 
 app = FastAPI(
     title="Order Assessment API",
-    description="订单、SKU 匹配、GST 计算、运费估算与承运商测试环境查询。",
+    description="Orders, SKU matching, GST calculations, shipping estimates and carrier testbed tracking.",
     version="0.2.0",
 )
 app.add_middleware(RequestSizeLimit)
@@ -53,7 +53,9 @@ def read_source(loader):
     try:
         return loader()
     except (OSError, ValueError, KeyError, TypeError):
-        raise HTTPException(503, "本地订单或商品数据无效，请检查数据文件") from None
+        raise HTTPException(
+            503, "Local order or product data is invalid. Please check the data files."
+        ) from None
 
 
 @app.get("/api/orders", tags=["orders"])
@@ -81,7 +83,7 @@ def tracking(shipment_id: str):
     dataset = read_source(load_dataset)
     shipment = next((s for s in dataset.shipments if s.id == shipment_id), None)
     if shipment is None:
-        raise HTTPException(404, "物流记录不存在")
+        raise HTTPException(404, "Shipment not found.")
     return tracking_service.get(shipment)
 
 

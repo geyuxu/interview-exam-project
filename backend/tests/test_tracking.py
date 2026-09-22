@@ -112,7 +112,7 @@ def test_local_rate_limit(monkeypatch, shipment):
         shipment.tracking_no = f"TEST{index}"
         result = service.get(shipment)
     assert len(calls) == 10
-    assert "上限" in result["message"]
+    assert "query limit" in result["message"]
 
 
 def test_pdf_auth_shape_and_structured_401(monkeypatch, shipment):
@@ -169,7 +169,7 @@ def test_slow_tracking_does_not_block_other_consignments(monkeypatch, shipment):
         pending = pool.submit(service.get, shipment)
         try:
             assert started.wait(timeout=2)
-            assert "进行中" in service.get(shipment)["message"]
+            assert "in progress" in service.get(shipment)["message"]
             assert pool.submit(service.get, other).result(timeout=1)["state"] == "unavailable"
         finally:
             release.set()

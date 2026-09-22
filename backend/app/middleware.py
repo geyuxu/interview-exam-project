@@ -15,10 +15,12 @@ class RequestSizeLimit:
         try:
             declared_size = int(headers.get(b"content-length", b"0"))
         except ValueError:
-            response = JSONResponse({"detail": "无效的请求长度"}, status_code=400)
+            response = JSONResponse({"detail": "Invalid request length."}, status_code=400)
             return await response(scope, receive, send)
         if declared_size > self.max_bytes:
-            response = JSONResponse({"detail": "请求文件不能超过 1 MB"}, status_code=413)
+            response = JSONResponse(
+                {"detail": "The request must not exceed 1 MB."}, status_code=413
+            )
             return await response(scope, receive, send)
         body = bytearray()
         while True:
@@ -27,7 +29,9 @@ class RequestSizeLimit:
                 return
             body.extend(message.get("body", b""))
             if len(body) > self.max_bytes:
-                response = JSONResponse({"detail": "请求文件不能超过 1 MB"}, status_code=413)
+                response = JSONResponse(
+                    {"detail": "The request must not exceed 1 MB."}, status_code=413
+                )
                 return await response(scope, receive, send)
             if not message.get("more_body", False):
                 break

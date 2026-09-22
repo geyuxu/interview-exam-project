@@ -46,17 +46,15 @@ const carrierName = (carrier: string) =>
   ({ startrack: "StarTrack", auspost: "Australia Post", tnt: "TNT" })[
     carrier
   ] ?? carrier;
-const orderStatus = (status: string) =>
-  ({ Completed: "已完成", "In Transit": "运输中" })[status] ?? status;
 const trackingLabel = (result?: Tracking) =>
   result
     ? ({
-        available: "查询成功",
-        not_implemented: "未实现",
-        not_configured: "未配置",
-        unavailable: "暂不可用",
-      }[result.state] ?? "暂不可用")
-    : "等待查询";
+        available: "Available",
+        not_implemented: "Not integrated",
+        not_configured: "Not configured",
+        unavailable: "Unavailable",
+      }[result.state] ?? "Unavailable")
+    : "Pending";
 
 async function request<T>(
   path: string,
@@ -80,26 +78,34 @@ async function request<T>(
               .slice(0, 3)
               .map((item) =>
                 item && typeof item === "object"
-                  ? `${item.field ?? "输入"}: ${item.message ?? "校验失败"}`
-                  : "校验失败",
+                  ? `${item.field ?? "Input"}: ${item.message ?? "Validation failed"}`
+                  : "Validation failed",
               )
               .join("；")
           : typeof detail === "string"
             ? detail
-            : "请求失败，请稍后重试",
+            : "Request failed. Please try again later.",
       );
     }
     const validated = schema.safeParse(body);
     if (!validated.success)
-      throw new Error("服务返回的数据结构不正确，请重试或检查后端");
+      throw new Error(
+        "The server returned an unexpected data structure. Please retry or check the backend.",
+      );
     return validated.data;
   } catch (err) {
     if (err instanceof SyntaxError)
-      throw new Error("服务返回了无效数据，请确认后端已启动");
+      throw new Error(
+        "The server returned invalid data. Please check that the backend is running.",
+      );
     if (err instanceof DOMException && err.name === "AbortError")
-      throw new Error("请求超时或已取消，请重试");
+      throw new Error(
+        "The request timed out or was cancelled. Please try again.",
+      );
     if (err instanceof TypeError)
-      throw new Error("无法连接服务，请确认后端已启动");
+      throw new Error(
+        "Cannot connect to the server. Please check that the backend is running.",
+      );
     throw err;
   } finally {
     window.clearTimeout(timeout);
@@ -159,7 +165,9 @@ async function loadOrders(
     if (controller === orderRequest) {
       estimate.value = appliedEstimate;
       error.value =
-        err instanceof Error ? err.message : "无法连接服务，请确认后端已启动";
+        err instanceof Error
+          ? err.message
+          : "Cannot connect to the server. Please check that the backend is running.";
     }
   } finally {
     if (controller === orderRequest) loading.value = false;
@@ -188,7 +196,10 @@ async function queryTracking(shipment: Shipment) {
         last_update: null,
         events: [],
         environment: null,
-        message: err instanceof Error ? err.message : "查询失败，请重试",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Tracking request failed. Please try again.",
         checked_at: new Date().toISOString(),
       };
   } finally {
@@ -202,17 +213,18 @@ async function importFile(event: Event) {
   if (!file) return;
   try {
     if (file.size > 1024 * 1024)
-      throw new Error("请选择小于 1 MB 的订单 JSON 文件");
+      throw new Error("Please select an order JSON file no larger than 1 MB.");
     const dataset: unknown = JSON.parse(
       (await file.text()).replace(/^\uFEFF/, ""),
     );
     if (!dataset || typeof dataset !== "object" || Array.isArray(dataset))
       throw new Error(
-        "文件必须是包含 orders、shipments 和 line_items 的 JSON 对象",
+        "The file must be a JSON object containing orders, shipments and line_items.",
       );
     await loadOrders(dataset, true);
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "订单文件读取失败";
+    error.value =
+      err instanceof Error ? err.message : "Could not read the order file.";
   } finally {
     input.value = "";
   }
@@ -230,22 +242,22 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
 <template>
   <div class="workspace">
     <aside class="sidebar">
-      <a class="brand" href="/" aria-label="订单工作台首页"
+      <a class="brand" href="/" aria-label="Order workspace home"
         ><span class="brand-mark">a.</span
         ><span>AERIS<span class="brand-sub">ORDER WORKSPACE</span></span></a
       >
       <div class="sidebar-heading">
-        <span>订单管理</span><span class="count">{{ orders.length }}</span>
+        <span>Orders</span><span class="count">{{ orders.length }}</span>
       </div>
       <label class="search"
         ><span aria-hidden="true">⌕</span
         ><input
           v-model="query"
-          aria-label="搜索订单"
-          placeholder="搜索订单、客户或 SKU"
+          aria-label="Search orders"
+          placeholder="Order, customer or SKU"
           type="search"
       /></label>
-      <nav class="order-list" aria-label="订单列表">
+      <nav class="order-list" aria-label="Order list">
         <button
           v-for="order in filtered"
           :key="order.order_no"
@@ -270,11 +282,11 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
           >
         </button>
         <p v-if="!filtered.length && !loading" class="sidebar-empty">
-          没有匹配的订单
+          No matching orders
         </p>
       </nav>
       <div class="sidebar-footer">
-        <span class="small-dot"></span> 澳洲业务 · AUD
+        <span class="small-dot"></span> Australia · AUD
         <div>IT CODING ASSESSMENT</div>
       </div>
     </aside>
@@ -282,23 +294,23 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
     <main class="main">
       <header class="topbar">
         <span
-          >工作台 <span class="separator">/</span>
-          <strong>订单详情</strong></span
-        ><span class="environment">评估项目</span>
+          >Workspace <span class="separator">/</span>
+          <strong>Order details</strong></span
+        ><span class="environment">Assessment project</span>
       </header>
       <div class="content">
         <div class="page-heading">
           <div>
             <p class="eyebrow">ORDERS & DELIVERY</p>
-            <h1>订单详情</h1>
-            <p class="muted">查看商品明细、金额与配送进度。</p>
+            <h1>Order details</h1>
+            <p class="muted">Review products, totals and delivery progress.</p>
           </div>
           <div class="actions">
             <a
               class="button secondary"
               href="/api/orders/template"
               download="orders.json"
-              >下载订单模板</a
+              >Download template</a
             >
             <input
               ref="fileInput"
@@ -311,30 +323,31 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
               :disabled="loading"
               @click="fileInput?.click()"
             >
-              导入 JSON</button
+              Import JSON</button
             ><button
               class="button secondary"
               :disabled="loading"
               @click="loadOrders()"
             >
-              刷新订单
+              Refresh orders
             </button>
           </div>
         </div>
 
         <div v-if="error" class="alert error" role="alert">
-          <strong>操作未完成</strong><span>{{ error }}</span
-          ><button class="text-button" @click="loadOrders()">重试</button>
+          <strong>Action incomplete</strong><span>{{ error }}</span
+          ><button class="text-button" @click="loadOrders()">Retry</button>
         </div>
         <div v-if="imported" class="alert info">
           <span
-            >正在查看导入订单。数据仅保留在当前页面，物流通过承运商接口查询。</span
+            >Viewing imported orders. Data stays in this page; tracking is
+            queried through the carrier API.</span
           ><button class="text-button" @click="loadOrders(null, true)">
-            返回题目订单
+            Back to initial orders
           </button>
         </div>
         <div v-if="loading" class="loading" role="status">
-          正在读取订单与商品数据…
+          Loading orders and products…
         </div>
 
         <template v-else-if="active">
@@ -345,41 +358,41 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                 <span
                   class="badge"
                   :class="active.status === 'Completed' ? 'green' : 'blue'"
-                  >{{ orderStatus(active.status) }}</span
+                  >{{ active.status }}</span
                 >
               </div>
               <p class="muted">
-                {{ active.company }}<span class="separator">·</span>下单日期
+                {{ active.company }}<span class="separator">·</span>Ordered
                 {{ date(active.order_date) }}
               </p>
             </div>
             <div class="header-total">
-              <span>订单总额 · AUD</span
+              <span>Order total · AUD</span
               ><strong>{{ money(active.totals.total) }}</strong>
             </div>
           </section>
 
           <div class="stats">
             <div>
-              <span>商品种类 / 行数</span
+              <span>Line items</span
               ><strong>{{
                 active.items.length.toString().padStart(2, "0")
               }}</strong>
             </div>
             <div>
-              <span>商品总件数</span
+              <span>Total units</span
               ><strong>{{
                 active.quantity.toString().padStart(2, "0")
               }}</strong>
             </div>
             <div>
-              <span>配送批次</span
+              <span>Shipments</span
               ><strong>{{
                 active.shipments.length.toString().padStart(2, "0")
               }}</strong>
             </div>
             <div>
-              <span>发货邮编 → 收货邮编</span
+              <span>Origin → Destination postcode</span
               ><strong class="route"
                 >{{ active.origin_postcode }} <span>→</span>
                 {{ active.postcode }}</strong
@@ -399,23 +412,25 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
             <div class="primary-column">
               <section class="card items-card">
                 <div class="section-heading">
-                  <h2>商品明细</h2>
+                  <h2>Products</h2>
                   <span class="subtle"
-                    >{{ active.items.length }} 个 SKU · RRP 含 GST</span
+                    >{{ active.items.length }} SKUs · RRP includes GST</span
                   >
                 </div>
-                <p class="table-scroll-hint">左右滑动可查看数量和金额 →</p>
+                <p class="table-scroll-hint">
+                  Swipe to see quantities and prices →
+                </p>
                 <div class="table-scroll">
                   <table>
                     <caption class="visually-hidden">
-                      订单商品及未税金额
+                      Order products and amounts excluding GST
                     </caption>
                     <thead>
                       <tr>
-                        <th scope="col">商品</th>
-                        <th scope="col">数量</th>
-                        <th scope="col">RRP / 未税单价</th>
-                        <th scope="col">未税小计</th>
+                        <th scope="col">Product</th>
+                        <th scope="col">Qty</th>
+                        <th scope="col">RRP / Unit ex GST</th>
+                        <th scope="col">Subtotal ex GST</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -428,7 +443,7 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                             <div
                               class="product-image"
                               role="img"
-                              :aria-label="`Product ${index + 1} 占位图`"
+                              :aria-label="`Product ${index + 1} placeholder image`"
                             >
                               <svg viewBox="0 0 40 48" aria-hidden="true">
                                 <rect
@@ -458,7 +473,7 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                                 item.shipment_id
                               }}</span
                               ><span v-if="!item.matched" class="missing"
-                                >资料缺失</span
+                                >Missing data</span
                               >
                               <details
                                 v-if="
@@ -466,7 +481,7 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                                 "
                                 class="product-description"
                               >
-                                <summary>商品描述</summary>
+                                <summary>Description</summary>
                                 <p>{{ item.description }}</p>
                               </details>
                             </div>
@@ -475,7 +490,7 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                         <td class="numeric">{{ item.quantity }}</td>
                         <td class="numeric price">
                           <span>{{ money(item.rrp) }}</span
-                          ><small>{{ money(item.unit_ex_gst) }} 未税</small>
+                          ><small>{{ money(item.unit_ex_gst) }} ex GST</small>
                         </td>
                         <td class="numeric line-total">
                           {{ money(item.line_subtotal) }}
@@ -485,26 +500,29 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                   </table>
                 </div>
                 <div class="table-note">
-                  中性商品占位图 · 金额内部保留精度，显示时舍入到分。<span
+                  Product placeholder images. Amounts retain full precision and
+                  are displayed to two decimal places.<span
                     v-if="
                       active.totals.rounding_adjustment &&
                       active.totals.rounding_adjustment !== '0.00'
                     "
-                    >行小计显示值之和与订单未税小计存在
+                    >{{ " " }}The subtotal includes a display rounding
+                    adjustment of
                     {{ money(active.totals.rounding_adjustment) }}
-                    展示尾差；订单按未舍入金额汇总。</span
+                    relative to the sum of displayed line totals. It is
+                    calculated from unrounded amounts.</span
                   >
                 </div>
               </section>
 
               <section class="card tracking-section">
                 <div class="section-heading">
-                  <h2>物流追踪</h2>
-                  <span class="subtle">按配送批次查询</span>
+                  <h2>Shipment tracking</h2>
+                  <span class="subtle">Track each shipment</span>
                 </div>
                 <p class="section-intro">
-                  Australia Post / StarTrack
-                  使用测试环境，返回结果不代表真实包裹状态。
+                  Australia Post / StarTrack use a test environment. Results do
+                  not represent live parcel status.
                 </p>
                 <article
                   v-for="shipment in active.shipments"
@@ -537,13 +555,13 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                       "
                       >{{
                         trackingLoading[shipment.id]
-                          ? "查询中"
+                          ? "Loading"
                           : trackingLabel(tracking[shipment.id])
                       }}</span
                     >
                   </div>
                   <div class="shipment-skus">
-                    包含 {{ shipment.skus.join(" · ") }}
+                    Includes {{ shipment.skus.join(" · ") }}
                   </div>
                   <div>
                     <div class="tracking-result" aria-live="polite">
@@ -553,25 +571,25 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                       <p>
                         {{
                           trackingLoading[shipment.id]
-                            ? "正在向承运商查询…"
+                            ? "Contacting the carrier…"
                             : (tracking[shipment.id]?.message ??
-                              "等待查询物流信息")
+                              "Waiting for tracking information.")
                         }}
                       </p>
                       <p
                         v-if="tracking[shipment.id]?.error_code"
                         class="subtle"
                       >
-                        接口错误码：{{ tracking[shipment.id]?.error_code }}
+                        API error code: {{ tracking[shipment.id]?.error_code }}
                       </p>
                       <p v-if="tracking[shipment.id]?.cached" class="subtle">
-                        本次为 60 秒内的缓存结果
+                        Cached result from the last 60 seconds.
                       </p>
                       <p
                         v-if="tracking[shipment.id]?.last_update"
                         class="subtle"
                       >
-                        最近更新：{{ tracking[shipment.id]?.last_update }}
+                        Last updated: {{ tracking[shipment.id]?.last_update }}
                       </p>
                     </div>
                     <details
@@ -579,8 +597,9 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                       class="events"
                     >
                       <summary>
-                        查看
-                        {{ tracking[shipment.id]?.events.length }} 条物流事件
+                        View
+                        {{ tracking[shipment.id]?.events.length }} tracking
+                        events
                       </summary>
                       <ol>
                         <li
@@ -590,25 +609,26 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                         >
                           <strong>{{ event.description }}</strong
                           ><span>{{ event.location }}</span
-                          ><time>{{ event.date ?? "未提供时间" }}</time>
+                          ><time>{{ event.date ?? "Time not provided" }}</time>
                         </li>
                       </ol>
                     </details>
                   </div>
                   <div class="shipment-footer">
-                    <span>该批运费 {{ money(shipment.shipping.fee) }}</span
+                    <span>Shipment fee {{ money(shipment.shipping.fee) }}</span
                     ><button
                       v-if="shipment.carrier !== 'tnt'"
                       class="text-button"
                       :disabled="trackingLoading[shipment.id]"
                       @click="queryTracking(shipment)"
                     >
-                      重新查询 ↗
+                      Refresh tracking ↗
                     </button>
                   </div>
                 </article>
                 <p class="section-footnote">
-                  查询结果缓存 60 秒。事件时间保留承运商原始格式及其时区信息。
+                  Results are cached for 60 seconds. Event times retain the
+                  carrier format and time zone information.
                 </p>
               </section>
             </div>
@@ -616,7 +636,7 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
             <div class="secondary-column">
               <section class="card shipping-address">
                 <div class="section-heading">
-                  <h2>收货信息</h2>
+                  <h2>Ship to</h2>
                   <span class="subtle">AU</span>
                 </div>
                 <div class="address-body">
@@ -639,18 +659,18 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                   ><a :href="`mailto:${active.email}`">{{ active.email }}</a>
                 </div>
                 <div class="origin">
-                  <span class="small-dot"></span> 发货地 Ryde, NSW 2111
+                  <span class="small-dot"></span> From Ryde, NSW 2111
                 </div>
               </section>
 
               <section class="card summary-card">
                 <div class="section-heading">
-                  <h2>金额汇总</h2>
+                  <h2>Order summary</h2>
                   <span class="subtle">AUD</span>
                 </div>
                 <div class="summary-body">
                   <div class="summary-row">
-                    <span>未税小计</span
+                    <span>Subtotal ex GST</span
                     ><strong>{{ money(active.totals.subtotal) }}</strong>
                   </div>
                   <div class="summary-row">
@@ -659,33 +679,35 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                   </div>
                   <div class="summary-row">
                     <span
-                      >运费
-                      <small>{{ estimate ? "估算" : "未估算" }}</small></span
+                      >Shipping
+                      <small>{{
+                        estimate ? "estimated" : "not estimated"
+                      }}</small></span
                     ><strong>{{ money(active.totals.shipment_fee) }}</strong>
                   </div>
                   <div class="grand-total">
-                    <span>订单总额</span
+                    <span>Order total</span
                     ><strong>{{ money(active.totals.total) }}</strong>
                   </div>
                   <p v-if="!active.totals.complete" class="missing">
-                    商品资料不完整，暂不提供订单总额。
+                    Product data is incomplete. The order total is unavailable.
                   </p>
                   <label class="estimate-toggle"
                     ><input
                       v-model="estimate"
                       type="checkbox"
                       @change="loadOrders()"
-                    /><span>启用运费估算</span></label
+                    /><span>Estimate shipping</span></label
                   >
                   <p class="summary-note">
                     {{
                       estimate
-                        ? "估算金额仅供演示，非承运商报价。TNT 相关运费为零。"
-                        : "未启用估算时，运费按题目允许的回退值 A$0.00 展示。"
+                        ? "Estimates are illustrative, not carrier quotes. TNT shipping is zero."
+                        : "Shipping defaults to A$0.00 when estimates are disabled."
                     }}
                   </p>
                   <details class="fee-details">
-                    <summary>查看运费计算说明</summary>
+                    <summary>Shipping calculation details</summary>
                     <div
                       v-for="shipment in active.shipments"
                       :key="shipment.id"
@@ -696,7 +718,8 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                       >
                       <p>{{ shipment.shipping.reason }}</p>
                       <p v-if="shipment.shipping.chargeable_kg">
-                        计费重量 {{ shipment.shipping.chargeable_kg }} kg
+                        Chargeable weight
+                        {{ shipment.shipping.chargeable_kg }} kg
                       </p>
                     </div>
                   </details>
@@ -705,14 +728,18 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
             </div>
           </div>
           <footer class="page-footer">
-            <span>商品来自指定 SQL 数据源的本地快照 · 各订单独立结算</span
+            <span
+              >Products from a SQL query snapshot · Each order is calculated
+              separately</span
             ><span>Australian dollars · GST included in RRP</span>
           </footer>
         </template>
         <div v-else-if="!error" class="empty-state">
-          <h2>没有找到订单</h2>
-          <p>尝试其他订单编号、客户名或 SKU。</p>
-          <button class="button secondary" @click="query = ''">清除搜索</button>
+          <h2>No orders found</h2>
+          <p>Try another order number, customer name or SKU.</p>
+          <button class="button secondary" @click="query = ''">
+            Clear search
+          </button>
         </div>
       </div>
     </main>

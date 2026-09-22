@@ -32,12 +32,12 @@ def load_products() -> dict[str, dict]:
         or not isinstance(row.get("Description", ""), str)
         for row in rows
     ):
-        raise ValueError("商品目录格式无效")
+        raise ValueError("Invalid product catalogue format.")
     products = {row["SKU"].strip(): row for row in rows}
     if any(not key or not product["ProductName"].strip() for key, product in products.items()):
-        raise ValueError("商品 SKU 或名称不能为空")
+        raise ValueError("Product SKU and name must not be empty.")
     if len(products) != len(rows):
-        raise ValueError("商品目录中 SKU 重复")
+        raise ValueError("Duplicate SKU in the product catalogue.")
     return products
 
 
@@ -64,18 +64,18 @@ def shipping_estimate(lines: list[dict], postcode: str, carrier: str, enabled: b
     result = {
         "fee": "0.00",
         "state": "not_estimated",
-        "reason": "未启用运费估算",
+        "reason": "Shipping estimates are disabled.",
         "chargeable_kg": None,
     }
     if carrier == "tnt":
-        return {**result, "reason": "TNT 未实现，相关运费按题目要求为零"}
+        return {**result, "reason": "TNT is not integrated. Shipping defaults to zero."}
     if not enabled:
         return result
     weight, volume = ZERO, ZERO
     for line in lines:
         p = line["product"]
         if not p:
-            return {**result, "reason": "商品资料缺失，无法估算运费"}
+            return {**result, "reason": "Missing product data. Shipping cannot be estimated."}
         unit_weight = measurement(p.get("weight", ""), {"g": Decimal("0.001"), "kg": Decimal("1")})
         unit_volume = measurement(
             p.get("volume", ""),
@@ -93,7 +93,10 @@ def shipping_estimate(lines: list[dict], postcode: str, carrier: str, enabled: b
                 if unit_volume > 100000000:
                     unit_volume = None
         if unit_weight is None or unit_volume is None:
-            return {**result, "reason": "重量或尺寸单位缺失/不支持，无法估算运费"}
+            return {
+                **result,
+                "reason": "Missing or unsupported weight or dimension units. Shipping cannot be estimated.",
+            }
         weight += unit_weight * line["quantity"]
         volume += unit_volume * line["quantity"]
     chargeable = max(weight + Decimal("0.2"), volume * Decimal("1.2") / Decimal("5000"))
@@ -103,7 +106,7 @@ def shipping_estimate(lines: list[dict], postcode: str, carrier: str, enabled: b
     return {
         "fee": money(fee),
         "state": "estimated",
-        "reason": "演示估算：基础费 + 计费重量 + 邮区附加费；非承运商报价",
+        "reason": "Estimate: base fee + chargeable weight + postcode surcharge. This is not a carrier quote.",
         "chargeable_kg": str(chargeable.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)),
     }
 
@@ -125,7 +128,9 @@ def build_orders(
                 subtotal += line_total
                 displayed_lines += line_total.quantize(CENT, rounding=ROUND_HALF_UP)
             else:
-                warnings.append(f"{item.sku}：商品不存在或 RRP 无效，订单金额不完整")
+                warnings.append(
+                    f"{item.sku}: Product not found or invalid RRP. Order totals are incomplete."
+                )
             lines.append(
                 {
                     **item.model_dump(),
