@@ -103,6 +103,7 @@ test("imported tracking uses supplied consignment; test fixture stays in tests",
   page,
 }) => {
   const calls: string[] = [];
+  let trackingMessage = "Test fixture only";
   await page.route("**/api/tracking", async (route) => {
     calls.push(route.request().postDataJSON().tracking_no);
     await route.fulfill({
@@ -118,7 +119,7 @@ test("imported tracking uses supplied consignment; test fixture stays in tests",
             article_id: "TEST",
           },
         ],
-        message: "Test fixture only",
+        message: trackingMessage,
         environment: "testbed",
         checked_at: "2026-01-02T00:00:00Z",
       },
@@ -135,6 +136,10 @@ test("imported tracking uses supplied consignment; test fixture stays in tests",
   await expect(
     page.getByText("Synthetic test event", { exact: true }),
   ).toBeVisible();
+  trackingMessage = "Updated tracking response";
+  await page.getByRole("button", { name: "Refresh orders" }).click();
+  await expect(page.getByText(trackingMessage, { exact: true })).toBeVisible();
+  expect(calls.filter((id) => id === "IMPORTED123")).toHaveLength(2);
   await page.unroute("**/api/tracking");
   await page.route("**/api/tracking", (route) =>
     route.fulfill({ json: { state: "available", events: null } }),

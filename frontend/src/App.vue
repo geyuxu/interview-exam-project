@@ -81,7 +81,7 @@ async function request<T>(
                   ? `${item.field ?? "Input"}: ${item.message ?? "Validation failed"}`
                   : "Validation failed",
               )
-              .join("；")
+              .join("; ")
           : typeof detail === "string"
             ? detail
             : "Request failed. Please try again later.",
@@ -116,6 +116,7 @@ async function request<T>(
 async function loadOrders(
   dataset: unknown = imported.value,
   resetSearch = false,
+  refreshTracking = false,
 ) {
   orderRequest?.abort();
   const controller = new AbortController();
@@ -148,6 +149,7 @@ async function loadOrders(
         ),
       );
     if (
+      refreshTracking ||
       dataset !== imported.value ||
       shipmentSignature(result.orders) !== shipmentSignature(orders.value)
     ) {
@@ -314,7 +316,8 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
             >
             <input
               ref="fileInput"
-              class="visually-hidden"
+              hidden
+              aria-label="Order JSON file"
               type="file"
               accept=".json,application/json"
               @change="importFile"
@@ -327,7 +330,7 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
             ><button
               class="button secondary"
               :disabled="loading"
-              @click="loadOrders()"
+              @click="loadOrders(imported, false, true)"
             >
               Refresh orders
             </button>
