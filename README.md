@@ -197,7 +197,8 @@ frontend/src/style.css      响应式布局
 ## Git 与凭证安全
 
 `.env`、虚拟环境、node_modules、构建目录、临时文件及 `材料/` 均被忽略。
-仓库仅提交无值的 `.env.example`，不会提交材料中的真实密码。当前只进行本地提交，尚未配置 GitHub 远程仓库。
+仓库仅提交无值的 `.env.example`，不会提交材料中的真实密码。
+GitHub 仓库：<https://github.com/geyuxu/interview-exam-project>，当前开发分支为 `codex/order-details`。
 迁移时保留目标目录已有内容，原工程目录通过 Windows junction 指向新目录，避免当前会话引用断开。
 
 ## 官方参考
