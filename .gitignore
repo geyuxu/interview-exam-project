@@ -26,3 +26,6 @@ output/
 Thumbs.db
 .idea/
 .vscode/
+
+# Existing destination exclusions
+材料/

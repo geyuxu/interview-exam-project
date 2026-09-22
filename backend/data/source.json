@@ -1,0 +1,8 @@
+{
+  "source_url": "https://script.google.com/macros/s/AKfycbz7CmUgos3WY8Vmn6IuL40mJlsGhCvJZWxubWq0LZu3d3TdHIytPs1C5XNcJPZgle7J/exec",
+  "table": "product_list",
+  "query": "SELECT * FROM product_list WHERE SKU IN ('TBAMET10','TBAMET28','TBOPAL28','AURPUR10','HARNIG','LELCBD100','HALGEO15','MCMW10','MCBO30');",
+  "retrieved_at": "2026-09-22T09:28:06.698581+00:00",
+  "row_count": 9,
+  "storage": "Unmodified JSON query result, local snapshot permitted by assessment"
+}
