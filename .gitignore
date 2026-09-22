@@ -17,6 +17,8 @@ htmlcov/
 node_modules/
 dist/
 *.tsbuildinfo
+playwright-report/
+test-results/
 
 # Local artifacts and tools
 tmp/

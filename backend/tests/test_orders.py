@@ -23,8 +23,12 @@ def test_sample_totals_and_order_isolation():
     for order in orders:
         assert all(item["order_no"] == order["order_no"] for item in order["items"])
         totals = order["totals"]
-        assert Decimal(totals["total"]) == sum(Decimal(totals[key]) for key in ("subtotal", "gst", "shipment_fee"))
-        assert sum(Decimal(line["line_subtotal"]) for line in order["items"]) + Decimal(totals["rounding_adjustment"]) == Decimal(totals["subtotal"])
+        assert Decimal(totals["total"]) == sum(
+            Decimal(totals[key]) for key in ("subtotal", "gst", "shipment_fee")
+        )
+        assert sum(Decimal(line["line_subtotal"]) for line in order["items"]) + Decimal(
+            totals["rounding_adjustment"]
+        ) == Decimal(totals["subtotal"])
 
 
 def test_no_early_unit_rounding_or_double_tax(data):
@@ -47,7 +51,10 @@ def test_invalid_quantities_rejected(data, quantity):
         OrderDataset.model_validate(data)
 
 
-@pytest.mark.parametrize("case", ["cross_order", "orphan_line", "duplicate_order", "duplicate_shipment", "unused_shipment"])
+@pytest.mark.parametrize(
+    "case",
+    ["cross_order", "orphan_line", "duplicate_order", "duplicate_shipment", "unused_shipment"],
+)
 def test_invalid_relationships(data, case):
     if case == "cross_order":
         data["line_items"][0]["shipment_id"] = "Track 2"
@@ -93,7 +100,9 @@ def test_shipping_estimate_aggregates_with_tnt_zero():
 def test_unit_conversion_and_shipping_fallback():
     assert measurement("1000g", {"g": Decimal("0.001")}) == Decimal("1")
     assert measurement("1lb", {"g": Decimal("0.001")}) is None
-    result = shipping_estimate([{"product": {"weight": "1kg"}, "quantity": 1}], "3141", "startrack", True)
+    result = shipping_estimate(
+        [{"product": {"weight": "1kg"}, "quantity": 1}], "3141", "startrack", True
+    )
     assert result["state"] == "not_estimated"
     assert result["fee"] == "0.00"
 

@@ -24,11 +24,14 @@ class Order(InputModel):
     postcode: str = Field(pattern=r"^\d{4}$")
 
 
-class Shipment(InputModel):
-    id: Identifier
-    order_no: Identifier
+class TrackingRequest(InputModel):
     carrier: Literal["startrack", "auspost", "tnt"]
     tracking_no: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9-]+$")
+
+
+class Shipment(TrackingRequest):
+    id: Identifier
+    order_no: Identifier
 
 
 class LineItem(InputModel):

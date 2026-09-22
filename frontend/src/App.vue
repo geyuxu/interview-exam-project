@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import type { Order, Shipment, Tracking } from "./types";
+import type { ZodType } from "zod";
+import { OrdersResponseSchema, TrackingSchema } from "./contracts";
+import type { Order, Shipment, Tracking } from "./contracts";
 
 const orders = ref<Order[]>([]);
 const selected = ref("");
@@ -58,6 +60,7 @@ const trackingLabel = (result?: Tracking) =>
 
 async function request<T>(
   path: string,
+  schema: ZodType<T>,
   init: RequestInit = {},
   controller = new AbortController(),
 ): Promise<T> {
@@ -65,26 +68,38 @@ async function request<T>(
   const timeout = window.setTimeout(() => controller.abort(), 30000);
   try {
     const response = await fetch(path, { ...init, signal: controller.signal });
-    const body = await response.json();
+    const body: unknown = await response.json();
     if (!response.ok) {
-      const detail = body.detail;
+      const detail =
+        body && typeof body === "object" && "detail" in body
+          ? body.detail
+          : null;
       throw new Error(
         Array.isArray(detail)
           ? detail
               .slice(0, 3)
-              .map((item) => `${item.field}: ${item.message}`)
+              .map((item) =>
+                item && typeof item === "object"
+                  ? `${item.field ?? "输入"}: ${item.message ?? "校验失败"}`
+                  : "校验失败",
+              )
               .join("；")
           : typeof detail === "string"
             ? detail
             : "请求失败，请稍后重试",
       );
     }
-    return body as T;
+    const validated = schema.safeParse(body);
+    if (!validated.success)
+      throw new Error("服务返回的数据结构不正确，请重试或检查后端");
+    return validated.data;
   } catch (err) {
     if (err instanceof SyntaxError)
       throw new Error("服务返回了无效数据，请确认后端已启动");
     if (err instanceof DOMException && err.name === "AbortError")
       throw new Error("请求超时或已取消，请重试");
+    if (err instanceof TypeError)
+      throw new Error("无法连接服务，请确认后端已启动");
     throw err;
   } finally {
     window.clearTimeout(timeout);
@@ -101,9 +116,11 @@ async function loadOrders(
   orderRequest = controller;
   loading.value = true;
   error.value = "";
+  const requestedEstimate = estimate.value;
   try {
-    const result = await request<{ orders: Order[] }>(
-      `/api/orders${dataset ? "/preview" : ""}?estimate=${estimate.value}`,
+    const result = await request(
+      `/api/orders${dataset ? "/preview" : ""}?estimate=${requestedEstimate}`,
+      OrdersResponseSchema,
       dataset
         ? {
             method: "POST",
@@ -114,13 +131,26 @@ async function loadOrders(
       controller,
     );
     if (controller !== orderRequest) return;
-    if (dataset !== imported.value) {
+    const shipmentSignature = (list: Order[]) =>
+      JSON.stringify(
+        list.flatMap((order) =>
+          order.shipments.map((shipment) => [
+            shipment.id,
+            shipment.carrier,
+            shipment.tracking_no,
+          ]),
+        ),
+      );
+    if (
+      dataset !== imported.value ||
+      shipmentSignature(result.orders) !== shipmentSignature(orders.value)
+    ) {
       generation++;
       tracking.value = {};
       trackingLoading.value = {};
     }
     imported.value = dataset;
-    appliedEstimate = estimate.value;
+    appliedEstimate = requestedEstimate;
     orders.value = result.orders;
     if (resetSearch) query.value = "";
     if (!result.orders.some((order) => order.order_no === selected.value))
@@ -137,13 +167,18 @@ async function loadOrders(
 }
 
 async function queryTracking(shipment: Shipment) {
-  if (imported.value || trackingLoading.value[shipment.id]) return;
+  if (trackingLoading.value[shipment.id]) return;
   const current = generation;
   trackingLoading.value[shipment.id] = true;
   try {
-    const result = await request<Tracking>(
-      `/api/shipments/${encodeURIComponent(shipment.id)}/tracking`,
-    );
+    const result = await request("/api/tracking", TrackingSchema, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        carrier: shipment.carrier,
+        tracking_no: shipment.tracking_no,
+      }),
+    });
     if (current === generation) tracking.value[shipment.id] = result;
   } catch (err) {
     if (current === generation)
@@ -168,7 +203,9 @@ async function importFile(event: Event) {
   try {
     if (file.size > 1024 * 1024)
       throw new Error("请选择小于 1 MB 的订单 JSON 文件");
-    const dataset: unknown = JSON.parse(await file.text());
+    const dataset: unknown = JSON.parse(
+      (await file.text()).replace(/^\uFEFF/, ""),
+    );
     if (!dataset || typeof dataset !== "object" || Array.isArray(dataset))
       throw new Error(
         "文件必须是包含 orders、shipments 和 line_items 的 JSON 对象",
@@ -182,10 +219,9 @@ async function importFile(event: Event) {
 }
 
 watch(active, (order) => {
-  if (!imported.value)
-    order?.shipments.forEach((shipment) => {
-      if (!tracking.value[shipment.id]) void queryTracking(shipment);
-    });
+  order?.shipments.forEach((shipment) => {
+    if (!tracking.value[shipment.id]) void queryTracking(shipment);
+  });
 });
 onMounted(() => loadOrders());
 onUnmounted(() => controllers.forEach((controller) => controller.abort()));
@@ -258,6 +294,12 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
             <p class="muted">查看商品明细、金额与配送进度。</p>
           </div>
           <div class="actions">
+            <a
+              class="button secondary"
+              href="/api/orders/template"
+              download="orders.json"
+              >下载订单模板</a
+            >
             <input
               ref="fileInput"
               class="visually-hidden"
@@ -285,7 +327,8 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
           ><button class="text-button" @click="loadOrders()">重试</button>
         </div>
         <div v-if="imported" class="alert info">
-          <span>正在预览导入文件。数据不会保存，物流查询暂停。</span
+          <span
+            >正在查看导入订单。数据仅保留在当前页面，物流通过承运商接口查询。</span
           ><button class="text-button" @click="loadOrders(null, true)">
             返回题目订单
           </button>
@@ -448,9 +491,7 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                       active.totals.rounding_adjustment !== '0.00'
                     "
                     >行小计显示值之和与订单未税小计存在
-                    {{
-                      money(active.totals.rounding_adjustment)
-                    }}
+                    {{ money(active.totals.rounding_adjustment) }}
                     展示尾差；订单按未舍入金额汇总。</span
                   >
                 </div>
@@ -472,7 +513,13 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                 >
                   <div class="shipment-header">
                     <div class="carrier-icon" :class="shipment.carrier">
-                      {{ shipment.carrier === "tnt" ? "TNT" : shipment.carrier === "auspost" ? "AP" : "ST" }}
+                      {{
+                        shipment.carrier === "tnt"
+                          ? "TNT"
+                          : shipment.carrier === "auspost"
+                            ? "AP"
+                            : "ST"
+                      }}
                     </div>
                     <div class="shipment-identity">
                       <h3>
@@ -489,19 +536,17 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                           : 'neutral'
                       "
                       >{{
-                        imported
-                          ? "预览模式"
-                          : trackingLoading[shipment.id]
-                            ? "查询中"
-                            : trackingLabel(tracking[shipment.id])
+                        trackingLoading[shipment.id]
+                          ? "查询中"
+                          : trackingLabel(tracking[shipment.id])
                       }}</span
                     >
                   </div>
                   <div class="shipment-skus">
                     包含 {{ shipment.skus.join(" · ") }}
                   </div>
-                  <template v-if="!imported"
-                    ><div class="tracking-result" aria-live="polite">
+                  <div>
+                    <div class="tracking-result" aria-live="polite">
                       <strong v-if="tracking[shipment.id]?.status">{{
                         tracking[shipment.id]?.status
                       }}</strong>
@@ -512,6 +557,15 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                             : (tracking[shipment.id]?.message ??
                               "等待查询物流信息")
                         }}
+                      </p>
+                      <p
+                        v-if="tracking[shipment.id]?.error_code"
+                        class="subtle"
+                      >
+                        接口错误码：{{ tracking[shipment.id]?.error_code }}
+                      </p>
+                      <p v-if="tracking[shipment.id]?.cached" class="subtle">
+                        本次为 60 秒内的缓存结果
                       </p>
                       <p
                         v-if="tracking[shipment.id]?.last_update"
@@ -540,12 +594,11 @@ onUnmounted(() => controllers.forEach((controller) => controller.abort()));
                         </li>
                       </ol>
                     </details>
-                  </template>
-                  <p v-else class="muted">导入预览不调用外部物流接口。</p>
+                  </div>
                   <div class="shipment-footer">
                     <span>该批运费 {{ money(shipment.shipping.fee) }}</span
                     ><button
-                      v-if="!imported && shipment.carrier !== 'tnt'"
+                      v-if="shipment.carrier !== 'tnt'"
                       class="text-button"
                       :disabled="trackingLoading[shipment.id]"
                       @click="queryTracking(shipment)"
