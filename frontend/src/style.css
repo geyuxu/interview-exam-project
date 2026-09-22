@@ -1,0 +1,28 @@
+:root {
+  font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: #1b302b;
+  background: #f4f6f3;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button { font: inherit; }
+.shell { max-width: 960px; margin: 0 auto; padding: 64px 24px; }
+.eyebrow { color: #537267; font-size: 12px; font-weight: 700; letter-spacing: .16em; }
+h1 { margin: 16px 0; font-size: clamp(30px, 5vw, 46px); letter-spacing: -.04em; }
+.intro { max-width: 600px; color: #60716b; line-height: 1.8; }
+.status-card { margin-top: 40px; padding: 28px; background: white; border: 1px solid #dce5df; border-radius: 16px; }
+.status-header { display: flex; gap: 16px; justify-content: space-between; align-items: center; }
+h2 { margin: 0; font-size: 20px; }
+.badge { padding: 6px 12px; border-radius: 999px; background: #eef1f0; font-size: 13px; }
+.badge.ok { background: #e4f5eb; color: #226347; }
+.badge.error { background: #fff0e8; color: #924520; }
+.status-message { color: #60716b; line-height: 1.7; }
+button { border: 0; padding: 10px 18px; border-radius: 8px; background: #245c49; color: white; cursor: pointer; }
+button:hover { background: #194634; }
+button:disabled { opacity: .6; cursor: wait; }
+button:focus-visible { outline: 3px solid #7abb9f; outline-offset: 3px; }
+.note { margin-top: 28px; color: #60716b; font-size: 14px; line-height: 1.8; }
